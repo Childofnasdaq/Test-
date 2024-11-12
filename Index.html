@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deriv API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; color: #333; text-align: center; padding: 20px; }
+        #logs { max-width: 600px; margin: 20px auto; background: #fff; border: 1px solid #ddd; padding: 10px; border-radius: 5px; text-align: left; }
+        #logs p { margin: 0; padding: 5px; font-size: 14px; border-bottom: 1px solid #eee; }
+    </style>
+</head>
+<body>
+
+<h1>Deriv API Automated Trading Test</h1>
+<p>Enter your API token to connect to Deriv and place a test trade.</p>
+
+<input type="text" id="apiToken" placeholder="Enter Deriv API Token" style="width: 60%; padding: 10px; margin-bottom: 10px;">
+<button onclick="connectToDeriv()">Connect & Trade</button>
+
+<div id="logs"></div>
+
+<script>
+    let ws;
+    let isConnected = false;
+
+    function logMessage(message) {
+        const logContainer = document.getElementById('logs');
+        const logItem = document.createElement('p');
+        logItem.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+        logContainer.appendChild(logItem);
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    function connectToDeriv() {
+        const apiToken = document.getElementById('apiToken').value;
+        if (!apiToken) {
+            logMessage("API token is required.");
+            return;
+        }
+
+        ws = new WebSocket('wss://ws.binaryws.com/websockets/v3?app_id=1089');
+        ws.onopen = () => {
+            logMessage("Connecting to Deriv...");
+            ws.send(JSON.stringify({ authorize: apiToken }));
+        };
+
+        ws.onmessage = (message) => {
+            const response = JSON.parse(message.data);
+
+            if (response.error) {
+                logMessage(`Error: ${response.error.message}`);
+                ws.close();
+                return;
+            }
+
+            if (response.msg_type === 'authorize') {
+                isConnected = true;
+                logMessage("Authorization successful. Connected to Deriv.");
+                placeTrade();
+            } else if (response.msg_type === 'buy') {
+                logMessage(`Trade placed successfully. Contract ID: ${response.buy.contract_id}`);
+            }
+        };
+
+        ws.onerror = (error) => {
+            logMessage(`WebSocket error: ${error.message}`);
+        };
+
+        ws.onclose = () => {
+            isConnected = false;
+            logMessage("Disconnected from Deriv.");
+        };
+    }
+
+    function placeTrade() {
+        if (!isConnected) {
+            logMessage("Not connected. Cannot place trade.");
+            return;
+        }
+
+        const tradeRequest = {
+            buy: 1,
+            price: 10,                  // Amount for the trade
+            parameters: {
+                amount: 10,
+                basis: 'stake',
+                contract_type: 'CALL',   // 'CALL' or 'PUT'
+                currency: 'USD',
+                duration: 5,
+                duration_unit: 'm',
+                symbol: 'R_50'
+            }
+        };
+
+        logMessage("Placing trade...");
+        ws.send(JSON.stringify(tradeRequest));
+    }
+</script>
+
+</body>
+</html>
